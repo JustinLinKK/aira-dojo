@@ -14,9 +14,9 @@ outputs/
 outputs/mlebench_workloads/
 **/resource_monitor/
 **/workspace_agent/
-**/grading_report.json
-**/workload_result.json
-**/workload_run_config.json
+outputs/mlebench_workloads/**/grading_report.json
+outputs/mlebench_workloads/**/workload_result.json
+outputs/mlebench_workloads/**/workload_run_config.json
 
 # Kaggle credentials should never be copied into the repo.
 .kaggle/
