@@ -6,7 +6,7 @@
 		"context": "..",
 		"dockerfile": "Dockerfile"
 	},
-	"runArgs": ["--gpus", "all"]
+	"runArgs": ["--gpus=all", "--shm-size=16g"]
 }
 
 	// Features to add to the dev container. More info: https://containers.dev/features.

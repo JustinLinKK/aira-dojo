@@ -41,11 +41,54 @@ For stronger evidence, compare:
 
 The baseline phase is collected before `framework_total`, so display/driver VRAM, idle GPU watts, and background CPU usage are not counted as framework runtime.
 
-## Aerial Cactus Parallel Workload
+## Deterministic MLE-Bench Workloads
 
 For deterministic GPU profiling without LLM variation, use the built-in MLE-Bench workload runner. It executes fixed generated-solution code through `MLEBenchTask.step_task`, so the report still captures the primary `generated_solution_execute` phase.
 
-Prepare the selected task:
+For a long GPU training run on a 32 GB RTX 5090 class machine, prefer `histopathologic-cancer-detection`. It has about 174k train patches and is large enough to make `generated_solution_execute` dominate the report. `aerial-cactus-identification` is only useful as a smoke test.
+
+Prepare the histopathology task:
+
+```bash
+PYTHONPATH=src python src/dojo/tasks/mlebench/utils/prepare.py \
+  -c histopathologic-cancer-detection \
+  --data-dir=/workspaces/aira-dojo/.cache/mlebench
+
+export MLE_BENCH_DATA_DIR=/workspaces/aira-dojo/.cache/mlebench
+```
+
+Check that the prepared task is visible:
+
+```bash
+PYTHONPATH=src python -m dojo.monitoring.mlebench_workload_runner \
+  --check-only \
+  --task histopathologic-cancer-detection \
+  --data-dir=/workspaces/aira-dojo/.cache/mlebench
+```
+
+Run the long four-model histopathology workload:
+
+```bash
+PYTHONPATH=src python -m dojo.monitoring.mlebench_workload_runner \
+  --task histopathologic-cancer-detection \
+  --workload parallel \
+  --data-dir=/workspaces/aira-dojo/.cache/mlebench \
+  --output-dir=/workspaces/aira-dojo/outputs/mlebench_workloads/histopathologic_p4_efficiency \
+  --parallel-models 4 \
+  --epochs 3 \
+  --batch-size 512 \
+  --image-size 96 \
+  --dataloader-workers 0 \
+  --train-repeat 1 \
+  --baseline-seconds 10 \
+  --sample-interval-sec 1 \
+  --gpu-query-interval-sec 1 \
+  --timeout-hours 8
+```
+
+For this devcontainer, `/dev/shm` is often very small, so use `--dataloader-workers 0`. The histopathology workload also auto-disables multiprocessing DataLoader workers when `/dev/shm` is below 1 GiB. For a stronger stress run, increase only one knob at a time: `--parallel-models 6`, then `--parallel-models 8`, then `--train-repeat 2`.
+
+Prepare the smaller aerial cactus smoke task:
 
 ```bash
 python src/dojo/tasks/mlebench/utils/prepare.py \

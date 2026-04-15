@@ -18,13 +18,18 @@ from dojo.utils.environment import get_mlebench_data_dir
 
 TASK_NAME = "aerial-cactus-identification"
 WORKLOAD_DIR = Path(__file__).resolve().parent / "workloads"
+HISTOPATHOLOGIC_TASK_NAME = "histopathologic-cancer-detection"
 BUILTIN_WORKLOADS = {
     "parallel": WORKLOAD_DIR / "aerial_cactus_parallel.py",
     "noop": WORKLOAD_DIR / "aerial_cactus_noop.py",
+    "aerial_cactus_parallel": WORKLOAD_DIR / "aerial_cactus_parallel.py",
+    "histopathologic_parallel": WORKLOAD_DIR / "histopathologic_parallel.py",
 }
 
 
-def workload_path(value: str) -> Path:
+def workload_path(value: str, task_name: str = TASK_NAME) -> Path:
+    if value == "parallel" and task_name == HISTOPATHOLOGIC_TASK_NAME:
+        return BUILTIN_WORKLOADS["histopathologic_parallel"]
     if value in BUILTIN_WORKLOADS:
         return BUILTIN_WORKLOADS[value]
     return Path(value).expanduser().resolve()
@@ -43,14 +48,17 @@ def validate_prepared_task(data_dir: str | Path, task_name: str = TASK_NAME) -> 
         )
     sample_matches = sorted(public_dir.glob("**/sample_submission*.csv"))
     train_matches = sorted(public_dir.glob("**/train.csv"))
+    if not train_matches:
+        train_matches = sorted(public_dir.glob("**/train_labels.csv"))
     if not sample_matches:
         raise FileNotFoundError(f"No sample_submission*.csv found under {public_dir}")
     if not train_matches:
-        raise FileNotFoundError(f"No train.csv found under {public_dir}")
+        raise FileNotFoundError(f"No train.csv or train_labels.csv found under {public_dir}")
     return {
         "task_root": str(task_root),
         "public_dir": str(public_dir),
         "private_dir": str(private_dir),
+        "train_file": str(train_matches[0]),
         "train_csv": str(train_matches[0]),
         "sample_submission": str(sample_matches[0]),
     }
@@ -58,6 +66,13 @@ def validate_prepared_task(data_dir: str | Path, task_name: str = TASK_NAME) -> 
 
 def build_workload_env(args: argparse.Namespace) -> dict[str, str]:
     return {
+        "MLEBENCH_WORKLOAD_PARALLEL_MODELS": str(args.parallel_models),
+        "MLEBENCH_WORKLOAD_EPOCHS": str(args.epochs),
+        "MLEBENCH_WORKLOAD_BATCH_SIZE": str(args.batch_size),
+        "MLEBENCH_WORKLOAD_IMAGE_SIZE": str(args.image_size),
+        "MLEBENCH_WORKLOAD_DATALOADER_WORKERS": str(args.dataloader_workers),
+        "MLEBENCH_WORKLOAD_BASE_SEED": str(args.seed),
+        "MLEBENCH_WORKLOAD_TRAIN_REPEAT": str(args.train_repeat),
         "AERIAL_CACTUS_PARALLEL_MODELS": str(args.parallel_models),
         "AERIAL_CACTUS_EPOCHS": str(args.epochs),
         "AERIAL_CACTUS_BATCH_SIZE": str(args.batch_size),
@@ -65,6 +80,13 @@ def build_workload_env(args: argparse.Namespace) -> dict[str, str]:
         "AERIAL_CACTUS_DATALOADER_WORKERS": str(args.dataloader_workers),
         "AERIAL_CACTUS_BASE_SEED": str(args.seed),
         "AERIAL_CACTUS_TRAIN_REPEAT": str(args.train_repeat),
+        "HISTOPATHOLOGIC_PARALLEL_MODELS": str(args.parallel_models),
+        "HISTOPATHOLOGIC_EPOCHS": str(args.epochs),
+        "HISTOPATHOLOGIC_BATCH_SIZE": str(args.batch_size),
+        "HISTOPATHOLOGIC_IMAGE_SIZE": str(args.image_size),
+        "HISTOPATHOLOGIC_DATALOADER_WORKERS": str(args.dataloader_workers),
+        "HISTOPATHOLOGIC_BASE_SEED": str(args.seed),
+        "HISTOPATHOLOGIC_TRAIN_REPEAT": str(args.train_repeat),
     }
 
 
@@ -120,7 +142,7 @@ def execute_monitored_workload(args: argparse.Namespace) -> dict[str, Any]:
     from dojo.config_dataclasses.task.mlebench import MLEBenchTaskConfig
     from dojo.tasks.mlebench.task import MLEBenchTask
 
-    workload_file = workload_path(args.workload)
+    workload_file = workload_path(args.workload, args.task)
     if not workload_file.exists():
         raise FileNotFoundError(f"Workload code file not found: {workload_file}")
 
@@ -204,7 +226,11 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--task", default=TASK_NAME)
     parser.add_argument("--data-dir", default=None, help="Defaults to MLE_BENCH_DATA_DIR.")
     parser.add_argument("--output-dir", default=None)
-    parser.add_argument("--workload", default="parallel", help="Built-ins: parallel, noop; or path to a Python file.")
+    parser.add_argument(
+        "--workload",
+        default="parallel",
+        help="Built-ins: parallel, noop, aerial_cactus_parallel, histopathologic_parallel; or path to a Python file.",
+    )
     parser.add_argument("--check-only", action="store_true", help="Only verify prepared task data and print paths.")
     parser.add_argument("--parallel-models", type=int, default=4)
     parser.add_argument("--epochs", type=int, default=8)

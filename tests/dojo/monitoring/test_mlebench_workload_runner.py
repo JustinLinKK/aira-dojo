@@ -29,6 +29,22 @@ def test_validate_prepared_task_accepts_minimal_aerial_cactus_layout(tmp_path) -
     assert result["sample_submission"].endswith("sample_submission.csv")
 
 
+def test_validate_prepared_task_accepts_histopathologic_train_labels_layout(tmp_path) -> None:
+    task_name = runner.HISTOPATHOLOGIC_TASK_NAME
+    public_dir = tmp_path / task_name / "prepared" / "public"
+    private_dir = tmp_path / task_name / "prepared" / "private"
+    public_dir.mkdir(parents=True)
+    private_dir.mkdir(parents=True)
+    (public_dir / "train_labels.csv").write_text("id,label\nx,1\n", encoding="utf-8")
+    (public_dir / "sample_submission.csv").write_text("id,label\ny,0\n", encoding="utf-8")
+
+    result = runner.validate_prepared_task(tmp_path, task_name)
+
+    assert result["train_file"].endswith("train_labels.csv")
+    assert result["train_csv"].endswith("train_labels.csv")
+    assert result["sample_submission"].endswith("sample_submission.csv")
+
+
 def test_workload_env_and_temporary_env_restore() -> None:
     args = argparse.Namespace(
         parallel_models=4,
@@ -44,6 +60,8 @@ def test_workload_env_and_temporary_env_restore() -> None:
     assert env["AERIAL_CACTUS_PARALLEL_MODELS"] == "4"
     assert env["AERIAL_CACTUS_EPOCHS"] == "8"
     assert env["AERIAL_CACTUS_TRAIN_REPEAT"] == "3"
+    assert env["HISTOPATHOLOGIC_PARALLEL_MODELS"] == "4"
+    assert env["MLEBENCH_WORKLOAD_PARALLEL_MODELS"] == "4"
 
     os.environ["AERIAL_CACTUS_PARALLEL_MODELS"] = "old"
     with runner.temporary_env(env):
@@ -57,6 +75,11 @@ def test_workload_path_resolves_builtin_and_custom(tmp_path) -> None:
     custom.write_text("print('ok')\n", encoding="utf-8")
 
     assert runner.workload_path("parallel") == runner.BUILTIN_WORKLOADS["parallel"]
+    assert (
+        runner.workload_path("parallel", runner.HISTOPATHOLOGIC_TASK_NAME)
+        == runner.BUILTIN_WORKLOADS["histopathologic_parallel"]
+    )
+    assert runner.workload_path("histopathologic_parallel") == runner.BUILTIN_WORKLOADS["histopathologic_parallel"]
     assert runner.workload_path(str(custom)) == custom.resolve()
 
 
