@@ -91,6 +91,22 @@ Examples:
   PRIMARY_KEY="sk-..." # <---- Set to your OpenAI key>
   ```
 
+- **Changing to OpenRouter endpoint:**
+
+  Go to [`src/dojo/configs/run/solver/client/litellm_4o.yaml`](./src/dojo/configs/solver/client/litellm_4o.yaml) and change the `api`, `model_id`, `base_url`, and `use_azure_client` to the following:
+  ```yaml
+    ...
+    api: openrouter
+    model_id: "openai/gpt-4o" # <---- Set to your OpenRouter model
+    base_url: https://openrouter.ai/api/v1
+    use_azure_client: False
+    ...
+  ```
+  Finally, in `.env`, set your OpenRouter key:
+  ```yaml
+  OPENROUTER_API_KEY="sk-or-..."
+  ```
+
 Note: To run the examples in the "Example Usage" section of this read me, you must setup the following models:
 - `o3`: Set the `base_url` in [`src//dojo/configs/solver/client/litellm_o3.yaml`](./src//dojo/configs/solver/client/litellm_o3.yaml) and set the `PRIMARY_KEY_O3` in `.env`.
 - `gpt-4o`: Set the `base_url` in [`src//dojo/configs/solver/client/litellm_4o.yaml`](./src/dojo/configs/solver/client/litellm_4o.yaml) and set the `PRIMARY_KEY` in `.env`.
