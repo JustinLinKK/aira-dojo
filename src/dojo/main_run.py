@@ -30,6 +30,7 @@ from dojo.utils.environment import (
     check_tensorflow_gpu,
     format_time,
 )
+from dojo.monitoring.monitor import ResourceMonitor
 from dojo.utils.slurm import get_slurm_id
 
 load_dotenv()
@@ -49,87 +50,107 @@ def _main(cfg: RunConfig):
     output_dir.mkdir(parents=True, exist_ok=True)
     cfg.save()
 
-    # Set environment variables
-    os.environ["HARDWARE"] = get_hardware()
-    os.environ["PYTORCH_GPU"] = check_pytorch_gpu()
-    os.environ["TENSORFLOW_GPU"] = check_tensorflow_gpu()
-    os.environ["TIME_LIMIT_SECS"] = str(cfg.solver.time_limit_secs)
-    os.environ["TIME_LIMIT"] = format_time(int(os.environ["TIME_LIMIT_SECS"]))
-    os.environ["STEP_LIMIT"] = str(cfg.solver.step_limit)
+    monitor = ResourceMonitor.from_config(cfg.monitoring, output_dir=cfg.logger.output_dir)
+    monitor.start()
+    try:
+        with monitor.phase("framework_total"):
+            with monitor.phase("environment_setup"):
+                # Set environment variables
+                os.environ["HARDWARE"] = get_hardware()
+                os.environ["PYTORCH_GPU"] = check_pytorch_gpu()
+                os.environ["TENSORFLOW_GPU"] = check_tensorflow_gpu()
+                os.environ["TIME_LIMIT_SECS"] = str(cfg.solver.time_limit_secs)
+                os.environ["TIME_LIMIT"] = format_time(int(os.environ["TIME_LIMIT_SECS"]))
+                os.environ["STEP_LIMIT"] = str(cfg.solver.step_limit)
 
-    # Store the slurm job ID
-    cfg.metadata.slurm_id = get_slurm_id()
+                # Store the slurm job ID
+                cfg.metadata.slurm_id = get_slurm_id()
 
-    # Sanity checks
-    log.info(f"Current working directory: {os.getcwd()}")
-    import dojo
+                # Sanity checks
+                log.info(f"Current working directory: {os.getcwd()}")
+                import dojo
 
-    log.info(f"`dojo` package source path: {inspect.getsourcefile(dojo)}")
-    import aira_core
+                log.info(f"`dojo` package source path: {inspect.getsourcefile(dojo)}")
+                import aira_core
 
-    log.info(f"`aira_core` package source path: {inspect.getsourcefile(aira_core)}")
-    import mlebench
+                log.info(f"`aira_core` package source path: {inspect.getsourcefile(aira_core)}")
+                import mlebench
 
-    log.info(f"`mlebench` package source path: {inspect.getsourcefile(mlebench)}")
+                log.info(f"`mlebench` package source path: {inspect.getsourcefile(mlebench)}")
 
-    # Create the output directory if it doesn't exist
-    log.info(f"Saving experiment artifacts to: {cfg.logger.output_dir}")
-    assert cfg.logger.output_dir is not None, (
-        "Path to the directory in which the launch artefacts will be written must be specified."
-    )
-    log.info(f"Output dir: {cfg.logger.output_dir}")
-    output_dir = Path(cfg.logger.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    cfg.save()
+                # Create the output directory if it doesn't exist
+                log.info(f"Saving experiment artifacts to: {cfg.logger.output_dir}")
+                assert cfg.logger.output_dir is not None, (
+                    "Path to the directory in which the launch artefacts will be written must be specified."
+                )
+                log.info(f"Output dir: {cfg.logger.output_dir}")
+                output_dir = Path(cfg.logger.output_dir)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                cfg.save()
 
-    if cfg.logger.write_env_vars:
-        write_env_variables_to_json(cfg.logger.output_dir)
+            with monitor.phase("logger_setup"):
+                if cfg.logger.write_env_vars:
+                    write_env_variables_to_json(cfg.logger.output_dir)
 
-    logger = config_logger(cfg)
+                logger = config_logger(cfg)
 
-    log.info("Instantiating the task...")
-    task = build(cfg.task, TASK_MAP)
+            with monitor.phase("task_instantiation"):
+                log.info("Instantiating the task...")
+                task = build(cfg.task, TASK_MAP)
 
-    # Allocate resources for the agent's workspace and instantiate an object that lets you reference and use them
-    solver_interpreter = build(cfg.interpreter, INTERPRETER_MAP, data_dir=cfg.task.data_dir)
+            with monitor.phase("interpreter_instantiation"):
+                # Allocate resources for the agent's workspace.
+                solver_interpreter = build(cfg.interpreter, INTERPRETER_MAP, data_dir=cfg.task.data_dir)
 
-    eval_interpreter = None
+                eval_interpreter = None
 
-    log.info("Preparing the workspaces...")
-    state, task_info = task.prepare(solver_interpreter=solver_interpreter, eval_interpreter=eval_interpreter)
+            with monitor.phase("task_preparation"):
+                log.info("Preparing the workspaces...")
+                state, task_info = task.prepare(
+                    solver_interpreter=solver_interpreter,
+                    eval_interpreter=eval_interpreter,
+                )
 
-    log.info("Instantiating the solver...")
-    solver = build(cfg.solver, SOLVER_MAP, task_info=task_info)
+            with monitor.phase("solver_instantiation"):
+                log.info("Instantiating the solver...")
+                solver = build(cfg.solver, SOLVER_MAP, task_info=task_info)
 
-    # Load checkpoint state if it exists
-    log.info("Loading checkpoints, if any...")
-    solver.load_checkpoint()
+            with monitor.phase("solver_checkpoint_load"):
+                # Load checkpoint state if it exists
+                log.info("Loading checkpoints, if any...")
+                solver.load_checkpoint()
 
-    log.info("Starting the solver...")
-    state, solution, best_node = solver(task, state)
+            with monitor.phase("solver_execution"):
+                log.info("Starting the solver...")
+                state, solution, best_node = solver(task, state)
 
-    if solution is None:
-        log.error("No valid solution was generated")
-    else:
-        log.info("Evaluating the final solution...")
+            with monitor.phase("final_evaluation"):
+                if solution is None:
+                    log.error("No valid solution was generated")
+                else:
+                    log.info("Evaluating the final solution...")
 
-        if (
-            hasattr(best_node, "metric")
-            and hasattr(best_node.metric, "info")
-            and "score" in best_node.metric.info
-            and best_node.metric.info is not None
-        ):
-            log.info("We have the evaluation score already computed...")
-            fitness = best_node.metric.info["score"]
-            log.info(f"Final fitness: {fitness}")
-        else:
-            raise ValueError("This should not be reached and happening.")
+                    if (
+                        hasattr(best_node, "metric")
+                        and hasattr(best_node.metric, "info")
+                        and "score" in best_node.metric.info
+                        and best_node.metric.info is not None
+                    ):
+                        log.info("We have the evaluation score already computed...")
+                        fitness = best_node.metric.info["score"]
+                        log.info(f"Final fitness: {fitness}")
+                    else:
+                        raise ValueError("This should not be reached and happening.")
 
-        logger.log(fitness, LogEvent.EVAL)
+                    logger.log(fitness, LogEvent.EVAL)
 
-    log.info("Clean up...")
-    task.close(state)
-    logger.stop()
+            with monitor.phase("cleanup"):
+                log.info("Clean up...")
+                task.close(state)
+                logger.stop()
+    finally:
+        monitor.stop()
+        monitor.write_report()
 
 
 @hydra.main(version_base="1.3.2", config_path="configs", config_name="default_run")

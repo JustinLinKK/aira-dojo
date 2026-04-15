@@ -24,6 +24,7 @@ from dojo.core.tasks.constants import (
     VALID_SOLUTION,
 )
 from dojo.utils.code_parsing import extract_code
+from dojo.monitoring.phases import resource_phase
 
 from dojo.config_dataclasses.task.mlebench import MLEBenchTaskConfig
 
@@ -80,6 +81,7 @@ class MLEBenchTask(Task):
         # Resolve paths
         self.public_dir = Path(self.cfg.public_dir).resolve()
         self.private_dir = Path(self.cfg.private_dir).resolve()
+        self._step_counter = 0
 
     def prepare(self, **task_args):
         state = task_args
@@ -118,7 +120,15 @@ class MLEBenchTask(Task):
             return state, {EXECUTION_OUTPUT: exec_output, VALIDATION_FITNESS: None, VALID_SOLUTION: False}
 
         interpreter = state["solver_interpreter"]
-        exec_output: ExecutionResult = interpreter.run(solution, file_name=self._solution_script)
+        self._step_counter += 1
+        step = self._step_counter
+        with resource_phase(
+            "generated_solution_execute",
+            task=self.cfg.name,
+            step=step,
+            context="step_task",
+        ):
+            exec_output: ExecutionResult = interpreter.run(solution, file_name=self._solution_script)
         eval_result = {EXECUTION_OUTPUT: exec_output}
 
         # Check if the execution was not successful
@@ -132,13 +142,15 @@ class MLEBenchTask(Task):
                 self._submission_file_path.unlink(missing_ok=True)
         else:
             self.logger.info(f"Execution successful - fetching submission file for evaluation.")
-            interpreter.fetch_file(self._submission_file_path)
+            with resource_phase("submission_fetch", task=self.cfg.name, step=step, context="step_task"):
+                interpreter.fetch_file(self._submission_file_path)
             self.logger.info(f"Submission file fetched: {self._submission_file_path}")
 
         has_csv_submission = self._submission_file_path.exists()
         eval_result[VALID_SOLUTION] = False
         if has_csv_submission:
-            is_valid_submission, message = validate_submission(self._submission_file_path, self.competition)
+            with resource_phase("submission_validate", task=self.cfg.name, step=step, context="step_task"):
+                is_valid_submission, message = validate_submission(self._submission_file_path, self.competition)
             eval_result[VALID_SOLUTION] = is_valid_submission
             eval_result[VALID_SOLUTION_FEEDBACK] = message
             self.logger.info(
@@ -147,12 +159,13 @@ class MLEBenchTask(Task):
 
             if is_valid_submission:
                 self.logger.info(f"Evaluating submission: {self._submission_file_path}")
-                test_fitness, report = evaluate.evaluate_submission(
-                    submission_path=self._submission_file_path,
-                    data_dir=Path(self.cfg.cache_dir),
-                    competition_id=self.cfg.name,
-                    results_output_dir=Path(self.cfg.results_output_dir),
-                )
+                with resource_phase("mlebench_evaluate", task=self.cfg.name, step=step, context="step_task"):
+                    test_fitness, report = evaluate.evaluate_submission(
+                        submission_path=self._submission_file_path,
+                        data_dir=Path(self.cfg.cache_dir),
+                        competition_id=self.cfg.name,
+                        results_output_dir=Path(self.cfg.results_output_dir),
+                    )
                 eval_result[TEST_FITNESS] = test_fitness
                 eval_result[AUX_EVAL_INFO] = parse_report(report)
                 self.logger.info(f"Test fitness: {test_fitness} || AUX eval info: {eval_result[AUX_EVAL_INFO]}")
@@ -184,19 +197,22 @@ class MLEBenchTask(Task):
         if self._submission_file_path is None:
             raise Exception("The path to the submission file must be set.")
 
-        exec_output = interpreter.run(solution, file_name=self._solution_script)
+        with resource_phase("generated_solution_execute", task=self.cfg.name, context="evaluate_fitness"):
+            exec_output = interpreter.run(solution, file_name=self._solution_script)
         eval_result = {EXECUTION_OUTPUT: exec_output}
 
-        interpreter.fetch_file(self._submission_file_path)
+        with resource_phase("submission_fetch", task=self.cfg.name, context="evaluate_fitness"):
+            interpreter.fetch_file(self._submission_file_path)
         has_csv_submission = self._submission_file_path.exists()
         assert has_csv_submission, "The final solution is not valid!"
 
-        test_fitness, report = evaluate.evaluate_submission(
-            submission_path=self._submission_file_path,
-            data_dir=Path(self.cfg.cache_dir),
-            competition_id=self.cfg.name,
-            results_output_dir=Path(self.cfg.results_output_dir),
-        )
+        with resource_phase("mlebench_evaluate", task=self.cfg.name, context="evaluate_fitness"):
+            test_fitness, report = evaluate.evaluate_submission(
+                submission_path=self._submission_file_path,
+                data_dir=Path(self.cfg.cache_dir),
+                competition_id=self.cfg.name,
+                results_output_dir=Path(self.cfg.results_output_dir),
+            )
         eval_result[TEST_FITNESS] = test_fitness
         eval_result[AUX_EVAL_INFO] = parse_report(report)
 

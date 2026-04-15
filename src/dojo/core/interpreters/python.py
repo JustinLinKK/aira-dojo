@@ -33,6 +33,7 @@ from omegaconf import OmegaConf
 from dojo.core.interpreters.base import ExecutionResult, Interpreter
 from dojo.utils.logger import CollectiveLogger, LogEvent, get_logger
 from dojo.core.interpreters.utils import copy_contents
+from dojo.monitoring.phases import register_process, unregister_process
 
 from dojo.config_dataclasses.interpreter.python import PythonInterpreterConfig
 
@@ -231,6 +232,7 @@ class PythonInterpreter(Interpreter):
             args=(self.code_inq, self.result_outq, self.event_outq),
         )
         self.process.start()
+        register_process(self.process.pid, label="python_interpreter_child")
 
     def cleanup_session(self) -> None:
         """
@@ -238,6 +240,7 @@ class PythonInterpreter(Interpreter):
         """
         if self.process is None:
             return
+        pid = self.process.pid
         try:
             self.process.terminate()
             self.process.join(timeout=2)
@@ -253,6 +256,7 @@ class PythonInterpreter(Interpreter):
         except Exception as e:
             self.logger.error(f"Error during process cleanup: {e}", LogEvent.INTERPRETER)
         finally:
+            unregister_process(pid)
             if self.process is not None:
                 self.process.close()
                 self.process = None

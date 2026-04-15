@@ -4,5 +4,6 @@ defaults:
   - task: ???
   - solver: ???
   - interpreter: ???
+  - monitoring: base_monitoring
 
 _target_: dojo.config_dataclasses.run.RunConfig

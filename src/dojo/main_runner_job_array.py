@@ -173,6 +173,7 @@ async def _main(runner_configs: list[RunnerConfig]):
                 task=task_cfg,
                 solver=runner_cfg.solver,
                 interpreter=runner_cfg.interpreter,
+                monitoring=runner_cfg.monitoring,
             )
 
             # Resolve interpolations (e.g. experiment ID, time, etc.)

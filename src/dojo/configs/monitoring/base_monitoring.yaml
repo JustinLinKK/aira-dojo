@@ -1,0 +1,14 @@
+_target_: dojo.config_dataclasses.monitoring.MonitoringConfig
+
+enabled: true
+sample_interval_sec: 1.0
+baseline_seconds: 10
+gpu_query_interval_sec: 1.0
+track_process_tree: true
+track_gpu_processes: true
+write_raw_samples: true
+write_report: true
+idle_gpu_util_threshold: 10
+idle_cpu_util_threshold: 20
+gpu_memory_idle_threshold_mb: 1024
+output_subdir: resource_monitor

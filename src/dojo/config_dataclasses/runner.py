@@ -17,6 +17,7 @@ from dojo.config_dataclasses.benchmark import BenchmarkConfig
 from dojo.config_dataclasses.solver.base import SolverConfig
 from dojo.config_dataclasses.interpreter.base import InterpreterConfig
 from dojo.config_dataclasses.launcher.base import LauncherConfig
+from dojo.config_dataclasses.monitoring import MonitoringConfig
 
 
 @dataclass
@@ -27,6 +28,7 @@ class RunnerConfig(BaseConfig):
     interpreter: InterpreterConfig = field(default_factory=InterpreterConfig)
     benchmark: BenchmarkConfig = field(default_factory=BenchmarkConfig)
     launcher: LauncherConfig = field(default_factory=LauncherConfig)
+    monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
     vars: dict[str, list] = field(
         default_factory=dict,
         metadata={

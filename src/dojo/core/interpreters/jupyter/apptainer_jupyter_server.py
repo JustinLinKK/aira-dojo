@@ -25,6 +25,7 @@ from typing import Dict, List
 
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .jupyter_client import JupyterClient
+from dojo.monitoring.phases import register_process, unregister_process
 
 import logging
 
@@ -107,6 +108,7 @@ class ApptainerJupyterServer(JupyterConnectable):
             start_new_session=True,
             env=env,
         )
+        register_process(self._subprocess.pid, label="apptainer_jupyter_server")
 
         # Satisfy mypy, we know this is not None because we passed PIPE
         assert self._subprocess.stderr is not None
@@ -141,22 +143,26 @@ class ApptainerJupyterServer(JupyterConnectable):
     def stop(self) -> None:
         if self._subprocess is None:
             return
+        pid = self._subprocess.pid
         log.warning("Stopping Jupyter server...")
-        if self._subprocess.poll() is None:
-            os.killpg(os.getpgid(self._subprocess.pid), signal.SIGTERM)
-            log.warning("Sent TERMINATE signal to Jupyter server. Waiting to terminate...")
-            try:
-                self._subprocess.wait(timeout=120)  # 2 minutes of grace period
-            except subprocess.TimeoutExpired:
-                log.error("!important : Jupyter server did not terminate. Forcing with KILL signal...")
-                os.killpg(os.getpgid(self._subprocess.pid), signal.SIGKILL)
+        try:
+            if self._subprocess.poll() is None:
+                os.killpg(os.getpgid(self._subprocess.pid), signal.SIGTERM)
+                log.warning("Sent TERMINATE signal to Jupyter server. Waiting to terminate...")
                 try:
-                    self._subprocess.wait(timeout=120)
-                    log.warning("Jupyter killed successfully.")
+                    self._subprocess.wait(timeout=120)  # 2 minutes of grace period
                 except subprocess.TimeoutExpired:
-                    log.error("!important : Jupyter server did not terminate. I will wait for forever here")
-                    self._subprocess.wait()
+                    log.error("!important : Jupyter server did not terminate. Forcing with KILL signal...")
+                    os.killpg(os.getpgid(self._subprocess.pid), signal.SIGKILL)
+                    try:
+                        self._subprocess.wait(timeout=120)
+                        log.warning("Jupyter killed successfully.")
+                    except subprocess.TimeoutExpired:
+                        log.error("!important : Jupyter server did not terminate. I will wait for forever here")
+                        self._subprocess.wait()
+        finally:
             self._subprocess = None
+            unregister_process(pid)
             log.warning("Jupyter server terminated.")
 
     @property

@@ -16,6 +16,7 @@ from dojo.config_dataclasses.metadata import MetadataConfig
 from dojo.config_dataclasses.task.base import TaskConfig
 from dojo.config_dataclasses.solver.base import SolverConfig
 from dojo.config_dataclasses.interpreter.base import InterpreterConfig
+from dojo.config_dataclasses.monitoring import MonitoringConfig
 
 
 @dataclass
@@ -39,6 +40,7 @@ class RunConfig(BaseConfig):
     task: TaskConfig = field(default_factory=TaskConfig)
     solver: SolverConfig = field(default_factory=SolverConfig)
     interpreter: InterpreterConfig = field(default_factory=InterpreterConfig)
+    monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
 
     def save(self) -> None:
         """
