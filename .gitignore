@@ -6,6 +6,23 @@ workspaces/
 wandb/
 _scratch*
 
+# Local MLE-Bench/task artifacts
+# These can be huge, machine-specific, or contain run metadata.
+.cache/
+.cache/mlebench/
+outputs/
+outputs/mlebench_workloads/
+**/resource_monitor/
+**/workspace_agent/
+**/grading_report.json
+**/workload_result.json
+**/workload_run_config.json
+
+# Kaggle credentials should never be copied into the repo.
+.kaggle/
+kaggle.json
+*.kaggle.json
+
 # Ignore all folders in the mlebench dataset
 data/mlebench/*/
 # Do not ignore the utils folder and its content
@@ -17,6 +34,7 @@ data/mlebench/*/
 
 # Ignore mle-bench source code
 src/dojo/tasks/mlebench/mle-bench/
+src/dojo/tasks/mlebench/mle-bench/**
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

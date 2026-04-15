@@ -112,14 +112,13 @@ def summarize_eval_result(eval_result: dict[str, Any]) -> dict[str, Any]:
 
 def execute_monitored_workload(args: argparse.Namespace) -> dict[str, Any]:
     from dojo.config_dataclasses.interpreter.python import PythonInterpreterConfig
-    from dojo.config_dataclasses.interpreter import INTERPRETER_MAP
-    from dojo.utils.config import build
     from dojo.utils.logger import config_logger
 
     data_dir = Path(args.data_dir).expanduser().resolve()
     os.environ.setdefault("MLE_BENCH_DATA_DIR", str(data_dir))
-    from dojo.config_dataclasses.task import TASK_MAP
+    from dojo.core.interpreters.python import PythonInterpreter
     from dojo.config_dataclasses.task.mlebench import MLEBenchTaskConfig
+    from dojo.tasks.mlebench.task import MLEBenchTask
 
     workload_file = workload_path(args.workload)
     if not workload_file.exists():
@@ -176,9 +175,9 @@ def execute_monitored_workload(args: argparse.Namespace) -> dict[str, Any]:
             with monitor.phase("preparation_check", task=args.task):
                 validate_prepared_task(data_dir, args.task)
             with monitor.phase("task_instantiation", task=args.task):
-                task = build(task_config, TASK_MAP)
+                task = MLEBenchTask(task_config)
             with monitor.phase("interpreter_instantiation", interpreter="python"):
-                solver_interpreter = build(interpreter_config, INTERPRETER_MAP, data_dir=task_config.data_dir)
+                solver_interpreter = PythonInterpreter(interpreter_config, data_dir=Path(task_config.data_dir))
             with monitor.phase("task_preparation", task=args.task):
                 state, _ = task.prepare(solver_interpreter=solver_interpreter, eval_interpreter=None)
             with monitor.phase("fixed_solution_step", workload=str(workload_file)):
